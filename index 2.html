@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AI BODY SORTER</title>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0; min-height:100vh; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",
+  "Noto Sans Thai",Arial,sans-serif; color:#222;
+  background:linear-gradient(135deg,#f7fff9 0%,#f5fbff 55%,#fff8fb 100%);
+}
+.page{width:min(100%,1000px);margin:auto;padding:30px 18px 45px}
+.header{text-align:center;margin-bottom:24px}
+.logo{font-size:58px;line-height:1;margin-bottom:5px}
+h1{margin:0;font-size:clamp(38px,7vw,62px);font-weight:900;letter-spacing:.5px}
+.subtitle{margin:8px 0 0;font-size:18px;color:#666}
+.panel{
+  background:rgba(255,255,255,.92);border-radius:30px;padding:38px 34px;
+  box-shadow:0 10px 35px rgba(0,0,0,.09);border:1px solid rgba(255,255,255,.9);
+}
+.hero{text-align:center}
+.robot{font-size:65px;line-height:1;margin-bottom:12px}
+.hero h2{font-size:28px;margin:0 0 10px;font-weight:800}
+.hero p{font-size:17px;color:#666;line-height:1.6;margin:0 auto 24px;max-width:680px}
+.rules{
+ display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:760px;margin:0 auto 25px
+}
+.rule{
+ background:#f7f7f7;border-radius:18px;padding:15px 18px;text-align:left;
+ font-size:18px;font-weight:700
+}
+.start{
+ border:0;background:#2f80ed;color:white;border-radius:16px;padding:16px 35px;
+ font-size:21px;font-weight:800;box-shadow:0 6px 15px rgba(47,128,237,.25);
+ cursor:pointer
+}
+.start:active{transform:scale(.98)}
+.note{margin-top:16px;color:#777;font-size:15px}
+
+#game{display:none}
+.topbar{
+ display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:15px
+}
+.stat{
+ background:#fff;border-radius:16px;padding:13px;text-align:center;
+ box-shadow:0 3px 12px rgba(0,0,0,.07);font-size:17px
+}
+.stat b{font-size:20px}
+.question{text-align:center;font-size:25px;font-weight:800;margin:15px 0 5px}
+.target{text-align:center;font-size:34px;font-weight:900;margin:3px 0 14px}
+.progress{height:11px;background:#e9e9e9;border-radius:20px;overflow:hidden;margin-bottom:18px}
+.bar{height:100%;width:0;background:#62b5ff;transition:.25s}
+.camera-wrap{
+ position:relative;width:min(100%,720px);margin:auto;background:#eee;border-radius:22px;
+ overflow:hidden;min-height:320px;display:flex;align-items:center;justify-content:center
+}
+#video{width:100%;height:auto;display:block;transform:scaleX(-1);background:#111}
+#canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#cameraMessage{
+ position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+ background:rgba(0,0,0,.72);color:white;padding:12px 18px;border-radius:14px;
+ font-weight:700;text-align:center;z-index:3
+}
+.camera-error{background:#fff0f0!important;color:#b00020!important}
+.status{text-align:center;min-height:32px;margin:15px 0 5px;font-size:19px;font-weight:800}
+.ok{color:#159447}.bad{color:#d33}.wait{color:#777}
+.instructions{text-align:center;color:#777;font-size:14px;line-height:1.6}
+#result{display:none;text-align:center}
+.final-score{font-size:38px;font-weight:900;margin:15px 0}
+.again{
+ border:0;background:#222;color:white;border-radius:14px;padding:13px 25px;
+ font-size:18px;font-weight:800
+}
+@media(max-width:650px){
+ .page{padding:18px 12px 35px}.panel{padding:27px 17px;border-radius:24px}
+ .rules{grid-template-columns:1fr}.rule{font-size:16px}
+ .logo{font-size:48px} .subtitle{font-size:16px}
+ .hero h2{font-size:24px}.hero p{font-size:15px}
+ .target{font-size:29px}.camera-wrap{min-height:240px}
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="header">
+    <div class="logo">♻️</div>
+    <h1>AI BODY SORTER</h1>
+    <div class="subtitle">เกมแยกขยะด้วยท่าทาง AI</div>
+  </div>
+
+  <section class="panel hero" id="home">
+    <div class="robot">🤖 ♻️</div>
+    <h2>พร้อมท้าทาย AI หรือยัง?</h2>
+    <p>กล้องจะตรวจจับท่าทางของผู้เล่น แล้วตัดสินว่าท่าที่ทำตรงกับประเภทขยะหรือไม่</p>
+
+    <div class="rules">
+      <div class="rule">♻️ กางแขน = รีไซเคิล</div>
+      <div class="rule">🍎 มือขวา = ขยะอินทรีย์</div>
+      <div class="rule">🗑️ มือซ้าย = ขยะทั่วไป</div>
+      <div class="rule">☢️ นั่งยอง = ขยะอันตราย</div>
+    </div>
+
+    <button class="start" id="startBtn">▶️ เริ่มเกม</button>
+    <div class="note">เกมมี 20 ข้อ • เล่นทั้งหมด 1 นาที • ต้องมีความมั่นใจของ AI อย่างน้อย 75%</div>
+  </section>
+
+  <section class="panel" id="game">
+    <div class="topbar">
+      <div class="stat">ข้อ <b id="qNum">1</b> / <b id="qTotal">20</b></div>
+      <div class="stat">คะแนน <b id="score">0</b></div>
+      <div class="stat">⏱️ <b id="timer">1:00</b></div>
+    </div>
+
+    <div class="question">ทิ้งขยะชิ้นนี้ลงถังให้ถูกต้อง</div>
+    <div class="target" id="target">♻️ ขวดพลาสติก</div>
+    <div class="progress"><div class="bar" id="bar"></div></div>
+
+    <div class="camera-wrap" id="cameraBox">
+      <video id="video" width="640" height="480" autoplay playsinline muted></video>
+      <canvas id="canvas" width="640" height="480"></canvas>
+      <div id="cameraMessage">📷 กำลังเปิดกล้อง...</div>
+    </div>
+
+    <div id="status" class="status wait">กำลังกำหนดท่าทาง...</div>
+    <div class="instructions">
+      ทำท่าให้ตรงกับประเภทขยะ<br>
+      ❌ ทำผิด = อยู่ข้อเดิม &nbsp;&nbsp; ✅ ทำถูก = ได้ 1 คะแนนและไปข้อถัดไป
+    </div>
+  </section>
+
+  <section class="panel" id="result">
+    <div class="robot">🎉</div>
+    <h2 id="resultTitle">จบเกม!</h2>
+    <div class="final-score">คะแนน <span id="finalScore">0</span> / 20</div>
+    <button class="again" onclick="location.reload()">🔄 เล่นอีกครั้ง</button>
+  </section>
+</div>
+
+<script>
+const MODEL_URL="https://teachablemachine.withgoogle.com/models/R-27hNbMv/";
+const questions=[
+ {answer:"Recycle",emoji:"🥤",label:"ขวดพลาสติก"},
+ {answer:"Organic",emoji:"🍌",label:"เปลือกกล้วย"},
+ {answer:"General",emoji:"🍬",label:"ซองขนม"},
+ {answer:"Hazardous",emoji:"🔋",label:"ถ่านไฟฉาย"},
+ {answer:"Recycle",emoji:"🥫",label:"กระป๋องอะลูมิเนียม"},
+ {answer:"Organic",emoji:"🍎",label:"แกนแอปเปิล"},
+ {answer:"General",emoji:"🧻",label:"กระดาษทิชชูใช้แล้ว"},
+ {answer:"Hazardous",emoji:"💡",label:"หลอดไฟ"},
+ {answer:"Recycle",emoji:"📰",label:"หนังสือพิมพ์"},
+ {answer:"Organic",emoji:"🥬",label:"เศษผัก"},
+ {answer:"General",emoji:"🍱",label:"กล่องอาหารเปื้อน"},
+ {answer:"Hazardous",emoji:"🧴",label:"ภาชนะสารเคมี"},
+ {answer:"Recycle",emoji:"🍾",label:"ขวดแก้ว"},
+ {answer:"Organic",emoji:"🍉",label:"เปลือกแตงโม"},
+ {answer:"General",emoji:"🎈",label:"ลูกโป่ง"},
+ {answer:"Hazardous",emoji:"💊",label:"ยาเหลือใช้"},
+ {answer:"Recycle",emoji:"📦",label:"กล่องกระดาษ"},
+ {answer:"Organic",emoji:"🥚",label:"เปลือกไข่"},
+ {answer:"General",emoji:"🧹",label:"เศษวัสดุทั่วไป"},
+ {answer:"Hazardous",emoji:"🧪",label:"ภาชนะสารเคมีอันตราย"}
+];
+
+let model,video,ctx,running=false,currentQuestion=0,score=0;
+let timeLeft=60,timerInterval=null,lastCorrectTime=0,processing=false;
+
+const home=document.getElementById("home");
+const game=document.getElementById("game");
+const result=document.getElementById("result");
+const startBtn=document.getElementById("startBtn");
+const statusEl=document.getElementById("status");
+
+function norm(x){return String(x).trim().toLowerCase()}
+function updateTimer(){
+ const m=Math.floor(timeLeft/60),s=String(timeLeft%60).padStart(2,"0");
+ document.getElementById("timer").textContent=`${m}:${s}`;
+}
+function showQuestion(){
+ const q=questions[currentQuestion];
+ document.getElementById("qNum").textContent=currentQuestion+1;
+ document.getElementById("target").textContent=`${q.emoji} ${q.label}`;
+ document.getElementById("bar").style.width=`${currentQuestion/questions.length*100}%`;
+ statusEl.textContent="👀 กำลังรอท่าที่ถูกต้อง...";
+ statusEl.className="status wait";
+}
+function startTimer(){
+ clearInterval(timerInterval); timeLeft=60; updateTimer();
+ timerInterval=setInterval(()=>{
+   if(!running)return;
+   timeLeft--; updateTimer();
+   if(timeLeft<=0){timeLeft=0;updateTimer();finishGame("⏰ หมดเวลา!")}
+ },1000);
+}
+function finishGame(title){
+ if(!running)return;
+ running=false;clearInterval(timerInterval);
+ document.getElementById("finalScore").textContent=score;
+ document.getElementById("resultTitle").textContent=title;
+ game.style.display="none";result.style.display="block";
+}
+async function startGame(){
+ startBtn.disabled=true;
+ startBtn.textContent="⏳ กำลังโหลด AI...";
+ try{
+   const modelURL=MODEL_URL+"model.json";
+   const metadataURL=MODEL_URL+"metadata.json";
+   model=await tmPose.load(modelURL,metadataURL);
+
+   video=document.getElementById("video");
+   const cameraMessage=document.getElementById("cameraMessage");
+
+   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+     throw new Error("เบราว์เซอร์นี้ไม่รองรับกล้อง");
+   }
+
+   const stream=await navigator.mediaDevices.getUserMedia({
+     video:{
+       facingMode:"user",
+       width:{ideal:640},
+       height:{ideal:480}
+     },
+     audio:false
+   });
+
+   video.srcObject=stream;
+   await video.play();
+
+   cameraMessage.style.display="none";
+   ctx=document.getElementById("canvas").getContext("2d");
+   home.style.display="none"; game.style.display="block";
+   running=true; startTimer(); showQuestion();
+   requestAnimationFrame(loop);
+ }catch(err){
+   console.error(err);
+   startBtn.disabled=false;startBtn.textContent="▶️ เริ่มเกม";
+   const msg = document.getElementById("cameraMessage");
+   msg.style.display="block";
+   msg.className="camera-error";
+   msg.innerHTML="📷 เปิดกล้องไม่ได้<br><small>กดอนุญาต Camera หากมีหน้าต่างถามสิทธิ์ แล้วรีเฟรชหน้าเว็บ</small>";
+   alert("เปิดกล้องไม่สำเร็จ กรุณากด Allow/อนุญาตให้เว็บไซต์ใช้กล้อง แล้วรีเฟรชหน้าเว็บอีกครั้ง");
+ }
+}
+async function loop(){
+ if(!running)return;
+ if(video && video.readyState>=2 && !processing){
+   processing=true;
+   try{await predict()}catch(e){console.error(e)}
+   processing=false;
+ }
+ requestAnimationFrame(loop);
+}
+async function predict(){
+ const {pose,posenetOutput}=await model.estimatePose(webcam.canvas);
+ const predictions=await model.predict(posenetOutput);
+ let best=predictions[0];
+ for(const p of predictions)if(p.probability>best.probability)best=p;
+
+ ctx.drawImage(webcam.canvas,0,0,640,480);
+ if(pose){
+   ctx.save();
+   ctx.translate(640,0);
+   ctx.scale(-1,1);
+   tmPose.drawKeypoints(pose.keypoints,.5,ctx);
+   tmPose.drawSkeleton(pose.keypoints,.5,ctx);
+   ctx.restore();
+ }
+
+ const q=questions[currentQuestion];
+ const correct=norm(best.className)===norm(q.answer);
+
+ if(correct && best.probability>=.75 && Date.now()-lastCorrectTime>1200){
+   lastCorrectTime=Date.now();score++;
+   document.getElementById("score").textContent=score;
+   statusEl.textContent=`✅ ถูกต้อง! ${Math.round(best.probability*100)}%`;
+   statusEl.className="status ok";
+   currentQuestion++;
+
+   if(currentQuestion>=questions.length){
+     document.getElementById("bar").style.width="100%";
+     setTimeout(()=>finishGame("🎉 ทำครบ 20 ข้อแล้ว!"),600);
+   }else{
+     setTimeout(showQuestion,650);
+   }
+ }else if(best.probability>=.55){
+   statusEl.textContent=`❌ ยังไม่ถูก — AI ตรวจพบ ${best.className} (${Math.round(best.probability*100)}%)`;
+   statusEl.className="status bad";
+ }else{
+   statusEl.textContent="👀 กำลังตรวจจับท่าทาง...";
+   statusEl.className="status wait";
+ }
+}
+startBtn.addEventListener("click",startGame);
+document.getElementById("qTotal").textContent=questions.length;
+</script>
+</body>
+</html>
